@@ -9,6 +9,15 @@
   "buildEntryPoint": "index.html",
   "localAppUrl": "http://localhost:3000",
   "logoPath": "Default",
-  "connectionReferences": {},
+  "connectionReferences": {
+    "0043e7e8-999e-4ba2-93f3-c3e1d1d3725c": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_dynamicssmbsaas",
+      "displayName": "Dynamics 365 Business Central",
+      "dataSources": [
+        "dynamicssmbsaas"
+      ],
+      "dataSets": {}
+    }
+  },
   "databaseReferences": {}
 }
