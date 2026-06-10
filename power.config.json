@@ -1,0 +1,14 @@
+{
+  "version": "1.0",
+  "appId": null,
+  "appDisplayName": "BC Transfer Manager",
+  "region": "prod",
+  "environmentId": "8a22704e-7877-e531-a4d9-a4eaced22b0a",
+  "description": "",
+  "buildPath": "./dist",
+  "buildEntryPoint": "index.html",
+  "localAppUrl": "http://localhost:3000",
+  "logoPath": "Default",
+  "connectionReferences": {},
+  "databaseReferences": {}
+}
