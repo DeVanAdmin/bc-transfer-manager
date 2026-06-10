@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-do
 import CoordinatorView from './views/CoordinatorView';
 import OriginView from './views/OriginView';
 import DestinationView from './views/DestinationView';
+import DiagnosticView from './views/DiagnosticView';
 
 const devNavStyle: React.CSSProperties = {
   display: 'flex',
@@ -32,6 +33,7 @@ function DevRoleSwitcher() {
       <NavLink to="/coordinator" style={devNavLinkStyle}>Coordinator</NavLink>
       <NavLink to="/origin" style={devNavLinkStyle}>Origin</NavLink>
       <NavLink to="/destination" style={devNavLinkStyle}>Destination</NavLink>
+      <NavLink to="/diagnostic" style={devNavLinkStyle}>Diagnostic</NavLink>
     </nav>
   );
 }
@@ -45,6 +47,7 @@ export default function App() {
         <Route path="/coordinator" element={<CoordinatorView />} />
         <Route path="/origin" element={<OriginView />} />
         <Route path="/destination" element={<DestinationView />} />
+        {import.meta.env.DEV && <Route path="/diagnostic" element={<DiagnosticView />} />}
       </Routes>
     </BrowserRouter>
   );
