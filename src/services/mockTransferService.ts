@@ -1,4 +1,10 @@
-import type { TransferOrder, TransferOrderLine, Location, ItemAvailability } from './types';
+import type {
+  TransferOrder,
+  TransferOrderLine,
+  Location,
+  ItemAvailability,
+  NewTransferOrderLine,
+} from './types';
 import {
   mockTransferOrders,
   mockTransferOrderLines,
@@ -53,4 +59,44 @@ export async function postReceipt(
   console.log('POST_RECEIPT triggered — will connect to Power Automate flow in phase 4');
   const order = mockTransferOrders.find((o) => o.id === orderId || o.no === orderId);
   if (order) order.status = 'Received';
+}
+
+export async function createTransferOrder(
+  fromLocationCode: string,
+  toLocationCode: string,
+  shipmentDate: string,
+  receiptDate: string,
+  lines: NewTransferOrderLine[],
+): Promise<TransferOrder> {
+  await delay(WRITE_DELAY_MS);
+  // eslint-disable-next-line no-console
+  console.log('CREATE_TRANSFER_ORDER triggered — will connect to BC/Power Automate in phase 4');
+  const newOrder: TransferOrder = {
+    id: crypto.randomUUID(),
+    no: 'TO-' + Date.now(),
+    status: 'Open',
+    fromLocationCode,
+    toLocationCode,
+    shipmentDate,
+    receiptDate,
+    lineCount: lines.length,
+  };
+  mockTransferOrders.push(newOrder);
+  // Also push lines so the order's expansion in CoordinatorView shows content
+  // instead of "No line items found".
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    mockTransferOrderLines.push({
+      id: `${newOrder.id}-L${String(i + 1).padStart(2, '0')}`,
+      transferOrderId: newOrder.id,
+      lineNo: (i + 1) * 10000,
+      itemNo: l.itemNo,
+      description: l.description,
+      quantity: l.quantity,
+      unit: l.unit,
+      qtyShipped: 0,
+      qtyReceived: 0,
+    });
+  }
+  return newOrder;
 }

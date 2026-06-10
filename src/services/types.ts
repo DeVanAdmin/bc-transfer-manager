@@ -33,3 +33,10 @@ export interface ItemAvailability {
   locationCode: string;
   availableQuantity: number;
 }
+
+export interface NewTransferOrderLine {
+  itemNo: string;
+  description: string;
+  quantity: number;
+  unit: string;
+}

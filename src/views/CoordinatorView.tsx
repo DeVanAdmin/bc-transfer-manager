@@ -8,6 +8,7 @@ import {
   type TransferOrder,
   type TransferOrderLine,
 } from '../services';
+import NewTransferWizard from './NewTransferWizard';
 
 type StatusFilter = 'All' | TransferOrder['status'];
 
@@ -109,6 +110,19 @@ export default function CoordinatorView() {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [expandedLines, setExpandedLines] = useState<Record<string, TransferOrderLine[]>>({});
   const [hoverRowId, setHoverRowId] = useState<string | null>(null);
+  const [showWizard, setShowWizard] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const t = setTimeout(() => setToastMessage(null), 3000);
+    return () => clearTimeout(t);
+  }, [toastMessage]);
+
+  const onOrderCreated = (newOrder: TransferOrder) => {
+    setOrders((prev) => [newOrder, ...prev]);
+    setToastMessage(`Transfer order ${newOrder.no} created successfully`);
+  };
 
   const load = () => {
     setLoading(true);
@@ -209,8 +223,25 @@ export default function CoordinatorView() {
   // ── main render ──
   return (
     <main style={pageStyle}>
-      <h1 style={{ fontSize: 24, fontWeight: 500, color: '#111827', marginBottom: 4, marginTop: 0 }}>Transfer Order Manager</h1>
-      <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 24, marginTop: 0 }}>All locations — live overview</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 500, color: '#111827', margin: '0 0 4px' }}>Transfer Order Manager</h1>
+          <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>All locations — live overview</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowWizard(true)}
+          style={{
+            background: '#1d4ed8', color: '#ffffff',
+            padding: '8px 18px', borderRadius: 6,
+            fontSize: 14, fontWeight: 500,
+            border: 'none', cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          New transfer order
+        </button>
+      </div>
 
       {/* Summary strip */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
@@ -305,6 +336,29 @@ export default function CoordinatorView() {
           )}
         </tbody>
       </table>
+
+      {showWizard && (
+        <NewTransferWizard
+          locations={locations}
+          onClose={() => setShowWizard(false)}
+          onCreated={onOrderCreated}
+        />
+      )}
+
+      {toastMessage && (
+        <div
+          role="status"
+          style={{
+            position: 'fixed', bottom: 24, right: 24, zIndex: 100,
+            background: '#059669', color: '#ffffff',
+            padding: '12px 20px', borderRadius: 8,
+            fontSize: 14, fontWeight: 500,
+            boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+          }}
+        >
+          {toastMessage}
+        </div>
+      )}
     </main>
   );
 }

@@ -10,5 +10,6 @@ export const getLocations          = impl.getLocations;
 export const getItemAvailability   = impl.getItemAvailability;
 export const postShipment          = impl.postShipment;
 export const postReceipt           = impl.postReceipt;
+export const createTransferOrder   = impl.createTransferOrder;
 
 export * from './types';

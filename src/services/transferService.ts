@@ -6,6 +6,7 @@ import type {
   Location,
   ItemAvailability,
   TransferStatus,
+  NewTransferOrderLine,
 } from './types';
 
 type Rec = Record<string, unknown>;
@@ -140,4 +141,16 @@ export async function postShipment(_orderId: string): Promise<void> {
 
 export async function postReceipt(_orderId: string, _lines: { lineNo: number; qtyReceived: number }[]): Promise<void> {
   throw new Error(POSTING_UNSUPPORTED_MESSAGE);
+}
+
+export async function createTransferOrder(
+  _fromLocationCode: string,
+  _toLocationCode: string,
+  _shipmentDate: string,
+  _receiptDate: string,
+  _lines: NewTransferOrderLine[],
+): Promise<TransferOrder> {
+  throw new Error(
+    'createTransferOrder: not yet wired to BC — will be implemented when BC v2.0 exposes transfer order creation or via Power Automate flow.',
+  );
 }
