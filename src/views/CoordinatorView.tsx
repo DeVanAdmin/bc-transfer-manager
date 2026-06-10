@@ -1,4 +1,6 @@
-import { StatusBadge, LocationTag, ItemRow, LoadingState } from '../components/ui';
+import { useEffect, useState } from 'react';
+import { StatusBadge, LoadingState } from '../components/ui';
+import { getTransferOrders, type TransferOrder } from '../services';
 
 const pageStyle: React.CSSProperties = {
   padding: '24px 32px',
@@ -10,65 +12,76 @@ const pageStyle: React.CSSProperties = {
   width: '100%',
 };
 
-const sectionStyle: React.CSSProperties = {
-  marginTop: 24,
-  paddingTop: 16,
-  borderTop: '1px solid #e5e7eb',
-};
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 600,
-  letterSpacing: 0.6,
-  textTransform: 'uppercase',
-  color: '#6b7280',
-  marginBottom: 12,
-};
-
-const rowGroupStyle: React.CSSProperties = {
+const rowStyle: React.CSSProperties = {
   display: 'flex',
-  flexWrap: 'wrap',
-  gap: 12,
   alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '10px 0',
+  borderBottom: '1px solid #f3f4f6',
+};
+
+const noStyle: React.CSSProperties = {
+  fontFamily: 'ui-monospace, Menlo, Monaco, monospace',
+  fontSize: 14,
+  color: '#111827',
+};
+
+const routeStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: '#6b7280',
+  marginLeft: 8,
+};
+
+const errorStyle: React.CSSProperties = {
+  color: '#991b1b',
+  marginTop: 16,
+  padding: 12,
+  background: '#fef2f2',
+  borderRadius: 6,
+  fontSize: 14,
 };
 
 export default function CoordinatorView() {
+  const [orders, setOrders] = useState<TransferOrder[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    getTransferOrders()
+      .then((data) => { if (alive) setOrders(data); })
+      .catch((e: unknown) => {
+        if (!alive) return;
+        setError(e instanceof Error ? e.message : String(e));
+      });
+    return () => { alive = false; };
+  }, []);
+
   return (
     <main style={pageStyle}>
       <h1 style={{ fontSize: 24, margin: 0 }}>Coordinator Dashboard</h1>
       <p style={{ color: '#4b5563', marginTop: 4 }}>All transfer orders across all locations.</p>
 
-      <section style={sectionStyle}>
-        <div style={sectionTitleStyle}>StatusBadge</div>
-        <div style={rowGroupStyle}>
-          <StatusBadge status="Open" />
-          <StatusBadge status="In Transit" />
-          <StatusBadge status="Received" />
-        </div>
-      </section>
+      {error && <div style={errorStyle}>Failed to load transfer orders: {error}</div>}
 
-      <section style={sectionStyle}>
-        <div style={sectionTitleStyle}>LocationTag</div>
-        <div style={rowGroupStyle}>
-          <LocationTag name="WH-MAIN" />
-          <LocationTag name="WH-EAST" direction="from" />
-          <LocationTag name="WH-WEST" direction="to" />
-        </div>
-      </section>
+      {!error && orders === null && <LoadingState message="Loading transfer orders…" />}
 
-      <section style={sectionStyle}>
-        <div style={sectionTitleStyle}>ItemRow</div>
-        <div>
-          <ItemRow itemNo="SKU-00001" description="Cordless drill, 18V" quantity={10} unit="PCS" />
-          <ItemRow itemNo="SKU-00042" description="Steel wood screws, 1.5in (box)" quantity={50} unit="BOX" received={50} />
-          <ItemRow itemNo="SKU-00109" description="Safety goggles, anti-fog" quantity={20} unit="PCS" received={14} />
-        </div>
-      </section>
-
-      <section style={sectionStyle}>
-        <div style={sectionTitleStyle}>LoadingState</div>
-        <LoadingState message="Loading transfer orders…" />
-      </section>
+      {!error && orders !== null && (
+        <section style={{ marginTop: 16 }}>
+          {orders.length === 0 ? (
+            <p style={{ color: '#6b7280' }}>No transfer orders.</p>
+          ) : (
+            orders.map((o) => (
+              <div key={o.id} style={rowStyle}>
+                <div>
+                  <span style={noStyle}>{o.no}</span>
+                  <span style={routeStyle}>{o.fromLocationCode} → {o.toLocationCode}</span>
+                </div>
+                <StatusBadge status={o.status} />
+              </div>
+            ))
+          )}
+        </section>
+      )}
     </main>
   );
 }
