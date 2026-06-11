@@ -2,6 +2,8 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   createTransferOrder,
   getItemAvailability,
+  getItems,
+  type Item,
   type Location,
   type NewTransferOrderLine,
   type TransferOrder,
@@ -29,14 +31,6 @@ function formatDateLabel(ymd: string): string {
   const [, y, mo, da] = m;
   return `${MONTH_SHORT[parseInt(mo, 10) - 1]} ${parseInt(da, 10)}, ${y}`;
 }
-
-// Hardcoded item catalog (spec)
-const ITEM_CATALOG: { itemNo: string; description: string; unit: string }[] = [
-  { itemNo: 'ITEM-1001', description: 'Widget A',       unit: 'PCS' },
-  { itemNo: 'ITEM-1002', description: 'Widget B',       unit: 'PCS' },
-  { itemNo: 'ITEM-1003', description: 'Bracket Set',    unit: 'BOX' },
-  { itemNo: 'ITEM-1004', description: 'Cable Assembly', unit: 'PCS' },
-];
 
 // ── styles ───────────────────────────────────────────────────────────────────
 const backdropStyle: React.CSSProperties = {
@@ -141,12 +135,27 @@ export default function NewTransferWizard({ locations, onClose, onCreated }: New
   const [availabilityCache, setAvailabilityCache] = useState<Record<string, number>>({});
   const [creating, setCreating] = useState<boolean>(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [items, setItems] = useState<Item[]>([]);
+  const [itemsLoading, setItemsLoading] = useState<boolean>(true);
+  const [itemsError, setItemsError] = useState<string | null>(null);
 
   const locByCode = useMemo(() => {
     const m = new Map<string, string>();
     for (const l of locations) m.set(l.code, l.name);
     return m;
   }, [locations]);
+
+  // Load the item catalog from the service (real BC items, or mock in dev).
+  useEffect(() => {
+    let alive = true;
+    setItemsLoading(true);
+    setItemsError(null);
+    getItems()
+      .then((rows) => { if (alive) setItems(rows); })
+      .catch((e) => { if (alive) setItemsError(e instanceof Error ? e.message : String(e)); })
+      .finally(() => { if (alive) setItemsLoading(false); });
+    return () => { alive = false; };
+  }, []);
 
   // ── validation
   const sameLocations = !!fromLocation && !!toLocation && fromLocation === toLocation;
@@ -157,14 +166,14 @@ export default function NewTransferWizard({ locations, onClose, onCreated }: New
 
   const filteredCatalog = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return ITEM_CATALOG;
-    return ITEM_CATALOG.filter(
+    if (!q) return items;
+    return items.filter(
       (i) => i.itemNo.toLowerCase().includes(q) || i.description.toLowerCase().includes(q),
     );
-  }, [searchQuery]);
+  }, [searchQuery, items]);
 
   // ── handlers
-  const addItem = (item: typeof ITEM_CATALOG[number]) => {
+  const addItem = (item: Item) => {
     setAddedItems((prev) => prev.some((a) => a.itemNo === item.itemNo)
       ? prev
       : [...prev, { itemNo: item.itemNo, description: item.description, unit: item.unit, quantity: 1 }]);
@@ -330,8 +339,16 @@ export default function NewTransferWizard({ locations, onClose, onCreated }: New
             />
 
             <div style={{ marginBottom: 24 }}>
-              {filteredCatalog.length === 0 ? (
-                <div style={{ color: '#6b7280', fontSize: 13, padding: '12px 0' }}>No items match.</div>
+              {itemsLoading ? (
+                <div style={{ color: '#6b7280', fontSize: 13, padding: '12px 0' }}>Loading items...</div>
+              ) : itemsError ? (
+                <div style={{ color: '#991b1b', fontSize: 13, padding: '12px 0' }}>
+                  Failed to load items: {itemsError}
+                </div>
+              ) : filteredCatalog.length === 0 ? (
+                <div style={{ color: '#6b7280', fontSize: 13, padding: '12px 0' }}>
+                  {items.length === 0 ? 'No items found in Business Central.' : 'No items match.'}
+                </div>
               ) : (
                 filteredCatalog.map((item) => {
                   const isAdded = addedItems.some((a) => a.itemNo === item.itemNo);

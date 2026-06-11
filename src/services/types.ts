@@ -40,3 +40,9 @@ export interface NewTransferOrderLine {
   quantity: number;
   unit: string;
 }
+
+export interface Item {
+  itemNo: string;
+  description: string;
+  unit: string;
+}

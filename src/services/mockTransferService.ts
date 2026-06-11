@@ -4,12 +4,14 @@ import type {
   Location,
   ItemAvailability,
   NewTransferOrderLine,
+  Item,
 } from './types';
 import {
   mockTransferOrders,
   mockTransferOrderLines,
   mockLocations,
   mockItemAvailability,
+  mockItems,
 } from './mockData';
 
 const READ_DELAY_MS = 600;
@@ -34,6 +36,11 @@ export async function getTransferOrderLines(orderId: string): Promise<TransferOr
 export async function getLocations(): Promise<Location[]> {
   await delay(READ_DELAY_MS);
   return mockLocations.map((l) => ({ ...l }));
+}
+
+export async function getItems(): Promise<Item[]> {
+  await delay(READ_DELAY_MS);
+  return mockItems.map((i) => ({ ...i }));
 }
 
 export async function getItemAvailability(itemNo: string, locationCode: string): Promise<ItemAvailability> {

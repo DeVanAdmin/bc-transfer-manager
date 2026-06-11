@@ -1,10 +1,19 @@
-import type { TransferOrder, TransferOrderLine, Location, ItemAvailability } from './types';
+import type { TransferOrder, TransferOrderLine, Location, ItemAvailability, Item } from './types';
 
 export const mockLocations: Location[] = [
   { code: 'EAST',  name: 'East Warehouse' },
   { code: 'WEST',  name: 'West Warehouse' },
   { code: 'NORTH', name: 'North Warehouse' },
   { code: 'SOUTH', name: 'South Warehouse' },
+];
+
+export const mockItems: Item[] = [
+  { itemNo: 'ITEM-1001', description: 'Cordless drill 18V',        unit: 'PCS' },
+  { itemNo: 'ITEM-1002', description: 'Steel wood screws 1.5in',   unit: 'BOX' },
+  { itemNo: 'ITEM-1003', description: 'Safety goggles anti-fog',   unit: 'PCS' },
+  { itemNo: 'ITEM-1004', description: 'LED work light 30W',        unit: 'PCS' },
+  { itemNo: 'ITEM-1005', description: 'Nitrile gloves L',          unit: 'BOX' },
+  { itemNo: 'ITEM-1006', description: 'Heavy-duty extension cord', unit: 'PCS' },
 ];
 
 export const mockTransferOrders: TransferOrder[] = [

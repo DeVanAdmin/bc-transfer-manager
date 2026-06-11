@@ -7,6 +7,7 @@ import type {
   ItemAvailability,
   TransferStatus,
   NewTransferOrderLine,
+  Item,
 } from './types';
 
 type Rec = Record<string, unknown>;
@@ -112,6 +113,24 @@ export async function getLocations(): Promise<Location[]> {
       name: pickStr(r, 'displayName', 'name'),
     };
   });
+}
+
+export async function getItems(): Promise<Item[]> {
+  const { env, companyId } = await getBCContext();
+  const dataset = getBCDataset();
+  const rows = await unwrap('getItems', () =>
+    Dynamics365BusinessCentralService.GetItemsV3(env, companyId, dataset, 'items'),
+  );
+  return rows
+    .map((row) => {
+      const r = recordOf(row);
+      return {
+        itemNo: pickStr(r, 'number', 'no', 'itemNo'),
+        description: pickStr(r, 'displayName', 'description', 'name'),
+        unit: pickStr(r, 'baseUnitOfMeasureCode', 'baseUnitOfMeasure', 'unitOfMeasureCode') || 'PCS',
+      };
+    })
+    .filter((it) => it.itemNo.length > 0);
 }
 
 export async function getItemAvailability(itemNo: string, locationCode: string): Promise<ItemAvailability> {
