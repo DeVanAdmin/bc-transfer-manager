@@ -4,7 +4,9 @@
  */
 
 // Models
+export * as BCTransferManager_CreateTransferOrderModel from './models/BCTransferManager_CreateTransferOrderModel';
 export * as Dynamics365BusinessCentralModel from './models/Dynamics365BusinessCentralModel';
 
 // Services
+export * from './services/BCTransferManager_CreateTransferOrderService';
 export * from './services/Dynamics365BusinessCentralService';

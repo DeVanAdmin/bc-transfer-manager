@@ -67,6 +67,8 @@ export async function createTransferOrder(
   shipmentDate: string,
   receiptDate: string,
   lines: NewTransferOrderLine[],
+  _originEmail: string,
+  _destinationEmail: string,
 ): Promise<TransferOrder> {
   await delay(WRITE_DELAY_MS);
   // eslint-disable-next-line no-console

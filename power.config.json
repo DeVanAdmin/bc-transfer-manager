@@ -17,6 +17,21 @@
         "dynamicssmbsaas"
       ],
       "dataSets": {}
+    },
+    "673fe7c4-08d2-4931-8d9f-7687fabc2982": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_logicflows",
+      "displayName": "Logic flows",
+      "dataSources": [
+        "bctransfermanager_createtransferorder"
+      ],
+      "workflowDetails": {
+        "workflowEntityId": "937046de-9065-f111-a826-0022482a46b4",
+        "workflowDisplayName": "BC Transfer Manager — Create Transfer Order",
+        "workflowName": "45a515b7-5a63-71cf-4632-998c07a27c04",
+        "dependencies": {
+          "shared_dynamicssmbsaas": "0043e7e8-999e-4ba2-93f3-c3e1d1d3725c"
+        }
+      }
     }
   },
   "databaseReferences": {}

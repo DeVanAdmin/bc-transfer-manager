@@ -1,4 +1,4 @@
-import { Dynamics365BusinessCentralService } from '../generated';
+import { Dynamics365BusinessCentralService, BCTransferManager_CreateTransferOrderService } from '../generated';
 import { getBCContext, getBCDataset } from './bcContext';
 import type {
   TransferOrder,
@@ -143,14 +143,75 @@ export async function postReceipt(_orderId: string, _lines: { lineNo: number; qt
   throw new Error(POSTING_UNSUPPORTED_MESSAGE);
 }
 
+// The Create Transfer Order flow responds with a single text output (e.g.
+// "SUCCESS: TO000123"). The generator types Run() as IOperationResult<void>,
+// so the response payload isn't typed — coerce it to that response string,
+// whether the connector returns it raw or wrapped in an outputs object.
+function coerceFlowResult(data: unknown): string {
+  if (typeof data === 'string') return data;
+  if (data && typeof data === 'object') {
+    for (const v of Object.values(data as Record<string, unknown>)) {
+      if (typeof v === 'string') return v;
+    }
+  }
+  return '';
+}
+
 export async function createTransferOrder(
-  _fromLocationCode: string,
-  _toLocationCode: string,
-  _shipmentDate: string,
-  _receiptDate: string,
-  _lines: NewTransferOrderLine[],
+  fromLocationCode: string,
+  toLocationCode: string,
+  shipmentDate: string,
+  receiptDate: string,
+  lines: NewTransferOrderLine[],
+  originEmail: string,
+  destinationEmail: string,
 ): Promise<TransferOrder> {
-  throw new Error(
-    'createTransferOrder: not yet wired to BC — will be implemented when BC v2.0 exposes transfer order creation or via Power Automate flow.',
-  );
+  // Resolve human-readable location names to pass into the flow.
+  const locations = await getLocations();
+  const fromLocationName = locations.find((l) => l.code === fromLocationCode)?.name ?? fromLocationCode;
+  const toLocationName = locations.find((l) => l.code === toLocationCode)?.name ?? toLocationCode;
+
+  const orderDataJson = {
+    fromLocationCode,
+    fromLocationName,
+    toLocationCode,
+    toLocationName,
+    inTransitCode: 'OWN LOG.',
+    shipmentDate,
+    receiptDate,
+    originEmail,
+    destinationEmail,
+    lines: lines.map((l) => ({
+      itemNo: l.itemNo,
+      description: l.description,
+      quantity: l.quantity,
+      unit: l.unit,
+    })),
+  };
+
+  const result = await BCTransferManager_CreateTransferOrderService.Run({
+    text: JSON.stringify(orderDataJson),
+  });
+
+  if (!result.success) {
+    const msg = (result.error && 'message' in result.error ? result.error.message : undefined) ?? 'unknown';
+    throw new Error(`createTransferOrder flow failed: ${msg}`);
+  }
+
+  const raw = coerceFlowResult(result.data);
+  if (!raw.startsWith('SUCCESS:')) {
+    throw new Error(raw || 'createTransferOrder flow did not return a success response.');
+  }
+
+  const no = raw.slice('SUCCESS:'.length).trim();
+  return {
+    id: crypto.randomUUID(),
+    no,
+    status: 'Open',
+    fromLocationCode,
+    toLocationCode,
+    shipmentDate,
+    receiptDate,
+    lineCount: lines.length,
+  };
 }

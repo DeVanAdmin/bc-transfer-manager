@@ -194,6 +194,8 @@ export default function NewTransferWizard({ locations, onClose, onCreated }: New
     try {
       const newOrder = await createTransferOrder(
         fromLocation, toLocation, shipmentDate, receiptDate, addedItems,
+        import.meta.env.VITE_COORDINATOR_EMAIL ?? '',
+        import.meta.env.VITE_DESTINATION_EMAIL ?? '',
       );
       onCreated(newOrder);
       onClose();
