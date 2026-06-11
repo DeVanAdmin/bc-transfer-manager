@@ -1,4 +1,7 @@
-import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter, Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
+import AuthGuard from './components/AuthGuard';
+import { getDevRole } from './hooks/useUserRole';
 import CoordinatorView from './views/CoordinatorView';
 import OriginView from './views/OriginView';
 import DestinationView from './views/DestinationView';
@@ -20,6 +23,12 @@ const devNavLabelStyle: React.CSSProperties = {
   marginRight: '0.5rem',
 };
 
+const devNavRoleStyle: React.CSSProperties = {
+  fontWeight: 700,
+  color: '#7a5d00',
+  marginRight: '0.5rem',
+};
+
 const devNavLinkStyle = ({ isActive }: { isActive: boolean }): React.CSSProperties => ({
   color: isActive ? '#7a5d00' : '#444',
   textDecoration: isActive ? 'underline' : 'none',
@@ -27,9 +36,11 @@ const devNavLinkStyle = ({ isActive }: { isActive: boolean }): React.CSSProperti
 
 function DevRoleSwitcher() {
   if (!import.meta.env.DEV) return null;
+  const activeRole = (import.meta.env.VITE_DEV_ROLE as string | undefined) ?? '(unset)';
   return (
     <nav style={devNavStyle}>
       <span style={devNavLabelStyle}>DEV ROLE:</span>
+      <span style={devNavRoleStyle}>{activeRole}</span>
       <NavLink to="/coordinator" style={devNavLinkStyle}>Coordinator</NavLink>
       <NavLink to="/origin" style={devNavLinkStyle}>Origin</NavLink>
       <NavLink to="/destination" style={devNavLinkStyle}>Destination</NavLink>
@@ -38,15 +49,51 @@ function DevRoleSwitcher() {
   );
 }
 
+/**
+ * In development, land on the route matching VITE_DEV_ROLE on mount so that
+ * editing .env.local + restarting the dev server drops you on the right view.
+ */
+function DevRoleRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const devRole = getDevRole();
+    if (devRole) navigate(`/${devRole}`, { replace: true });
+  }, [navigate]);
+  return null;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <DevRoleSwitcher />
+      <DevRoleRedirect />
       <Routes>
         <Route path="/" element={<Navigate to="/coordinator" replace />} />
-        <Route path="/coordinator" element={<CoordinatorView />} />
-        <Route path="/origin" element={<OriginView />} />
-        <Route path="/destination" element={<DestinationView />} />
+        <Route
+          path="/coordinator"
+          element={
+            <AuthGuard requiredRole="coordinator">
+              <CoordinatorView />
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/origin"
+          element={
+            <AuthGuard requiredRole="origin">
+              <OriginView />
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/destination"
+          element={
+            <AuthGuard requiredRole="destination">
+              <DestinationView />
+            </AuthGuard>
+          }
+        />
         {import.meta.env.DEV && <Route path="/diagnostic" element={<DiagnosticView />} />}
       </Routes>
     </BrowserRouter>
