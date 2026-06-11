@@ -1,5 +1,8 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
+// HashRouter (not BrowserRouter): the Power Apps host serves this app at a deep
+// path (/play/e/{env}/app/{appId}), so path-based routing matches no route and
+// renders a blank screen. Hash routing is independent of the host pathname.
+import { HashRouter, Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import AuthGuard from './components/AuthGuard';
 import { getDevRole } from './hooks/useUserRole';
 import CoordinatorView from './views/CoordinatorView';
@@ -65,7 +68,7 @@ function DevRoleRedirect() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <DevRoleSwitcher />
       <DevRoleRedirect />
       <Routes>
@@ -96,6 +99,6 @@ export default function App() {
         />
         {import.meta.env.DEV && <Route path="/diagnostic" element={<DiagnosticView />} />}
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
