@@ -57,13 +57,62 @@ async function unwrap<T>(
   return res.data?.value ?? [];
 }
 
+// The custom "Transfer Order API" page (page 70000) exposes the full Transfer
+// Header table with no filter, via route devan/transferManager/v1.0. The
+// standard v2.0/transferOrders entity returns only a subset, which is why some
+// orders never showed. Prefer the custom API; fall back so we never regress.
+const TRANSFER_API_DATASET = 'devan/transferManager/v1.0';
+const TRANSFER_API_TABLE = 'transferOrderActions';
+const PAGE_SIZE = 5000;
+
+type PagedResult<T> = { ok: true; rows: T[] } | { ok: false; error: string };
+
+async function fetchAllRows<T>(
+  page: (
+    top: number,
+    skip: number,
+  ) => Promise<{ success: boolean; data?: { value?: T[] }; error?: { message?: string } | Error }>,
+): Promise<PagedResult<T>> {
+  const all: T[] = [];
+  let skip = 0;
+  // Page through results; cap iterations as a runaway guard.
+  for (let i = 0; i < 100; i++) {
+    const res = await page(PAGE_SIZE, skip);
+    if (!res.success) {
+      const msg = (res.error && 'message' in res.error ? res.error.message : undefined) ?? 'unknown';
+      return { ok: false, error: msg };
+    }
+    const rows = res.data?.value ?? [];
+    all.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+    skip += PAGE_SIZE;
+  }
+  return { ok: true, rows: all };
+}
+
 export async function getTransferOrders(): Promise<TransferOrder[]> {
   const { env, companyId } = await getBCContext();
   const dataset = getBCDataset();
-  const rows = await unwrap('getTransferOrders', () =>
-    Dynamics365BusinessCentralService.GetItemsV3(env, companyId, dataset, 'transferOrders'),
+
+  // Try the custom, unfiltered Transfer Order API first.
+  let result = await fetchAllRows((top, skip) =>
+    Dynamics365BusinessCentralService.GetItemsV3(
+      env, companyId, TRANSFER_API_DATASET, TRANSFER_API_TABLE, undefined, undefined, undefined, top, skip,
+    ),
   );
-  return rows.map((row) => {
+  // Fall back to the standard entity if the custom API isn't reachable.
+  if (!result.ok) {
+    result = await fetchAllRows((top, skip) =>
+      Dynamics365BusinessCentralService.GetItemsV3(
+        env, companyId, dataset, 'transferOrders', undefined, undefined, undefined, top, skip,
+      ),
+    );
+  }
+  if (!result.ok) {
+    throw new Error(`getTransferOrders failed: ${result.error}`);
+  }
+
+  return result.rows.map((row) => {
     const r = recordOf(row);
     return {
       id: pickStr(r, 'id', 'systemId'),
