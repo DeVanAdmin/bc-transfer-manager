@@ -28,6 +28,11 @@ export interface Location {
   name: string;
 }
 
+export interface Company {
+  id: string;
+  name: string;
+}
+
 export interface ItemAvailability {
   itemNo: string;
   locationCode: string;

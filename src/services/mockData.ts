@@ -1,4 +1,9 @@
-import type { TransferOrder, TransferOrderLine, Location, ItemAvailability, Item } from './types';
+import type { TransferOrder, TransferOrderLine, Location, ItemAvailability, Item, Company } from './types';
+
+export const mockCompanies: Company[] = [
+  { id: 'mock-company-1', name: 'CRONUS USA, Inc.' },
+  { id: 'mock-company-2', name: 'My Company' },
+];
 
 export const mockLocations: Location[] = [
   { code: 'EAST',  name: 'East Warehouse' },

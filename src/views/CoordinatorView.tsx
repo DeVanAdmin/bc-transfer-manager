@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ItemRow, LoadingState, LocationTag, StatusBadge } from '../components/ui';
 import {
+  getActiveCompanyId,
+  getCompanies,
   getLocations,
   getTransferOrderLines,
   getTransferOrders,
+  setActiveCompany,
+  type Company,
   type Location,
   type TransferOrder,
   type TransferOrderLine,
@@ -103,6 +107,8 @@ const overduePillStyle: React.CSSProperties = {
 export default function CoordinatorView() {
   const [orders, setOrders] = useState<TransferOrder[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
@@ -128,18 +134,35 @@ export default function CoordinatorView() {
     setLoading(true);
     setError(null);
     let alive = true;
-    Promise.all([getTransferOrders(), getLocations()])
-      .then(([o, l]) => {
-        if (!alive) return;
-        setOrders(o);
-        setLocations(l);
-      })
+    (async () => {
+      // Resolve companies first so all subsequent queries are scoped to the
+      // chosen company (defaults to the stored selection, else the first one).
+      const cos = await getCompanies();
+      const active = getActiveCompanyId();
+      const sel = cos.find((c) => c.id === active)?.id ?? cos[0]?.id ?? '';
+      if (sel) setActiveCompany(sel);
+      const [o, l] = await Promise.all([getTransferOrders(), getLocations()]);
+      if (!alive) return;
+      setCompanies(cos);
+      setSelectedCompanyId(sel);
+      setOrders(o);
+      setLocations(l);
+    })()
       .catch((e: unknown) => {
         if (!alive) return;
         setError(e instanceof Error ? e.message : String(e));
       })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
+  };
+
+  const onCompanyChange = (companyId: string) => {
+    setActiveCompany(companyId);
+    setSelectedCompanyId(companyId);
+    // Clear any expanded rows since their lines belong to the previous company.
+    setExpandedOrderId(null);
+    setExpandedLines({});
+    load();
   };
 
   useEffect(() => load(), []);
@@ -228,19 +251,33 @@ export default function CoordinatorView() {
           <h1 style={{ fontSize: 24, fontWeight: 500, color: '#111827', margin: '0 0 4px' }}>Transfer Order Manager</h1>
           <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>All locations — live overview</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowWizard(true)}
-          style={{
-            background: '#1d4ed8', color: '#ffffff',
-            padding: '8px 18px', borderRadius: 6,
-            fontSize: 14, fontWeight: 500,
-            border: 'none', cursor: 'pointer',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          New transfer order
-        </button>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          {companies.length > 0 && (
+            <select
+              aria-label="Company"
+              style={selectStyle}
+              value={selectedCompanyId}
+              onChange={(e) => onCompanyChange(e.target.value)}
+            >
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowWizard(true)}
+            style={{
+              background: '#1d4ed8', color: '#ffffff',
+              padding: '8px 18px', borderRadius: 6,
+              fontSize: 14, fontWeight: 500,
+              border: 'none', cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            New transfer order
+          </button>
+        </div>
       </div>
 
       {/* Summary strip */}

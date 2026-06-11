@@ -5,6 +5,7 @@ import type {
   ItemAvailability,
   NewTransferOrderLine,
   Item,
+  Company,
 } from './types';
 import {
   mockTransferOrders,
@@ -12,6 +13,7 @@ import {
   mockLocations,
   mockItemAvailability,
   mockItems,
+  mockCompanies,
 } from './mockData';
 
 const READ_DELAY_MS = 600;
@@ -41,6 +43,22 @@ export async function getLocations(): Promise<Location[]> {
 export async function getItems(): Promise<Item[]> {
   await delay(READ_DELAY_MS);
   return mockItems.map((i) => ({ ...i }));
+}
+
+export async function getCompanies(): Promise<Company[]> {
+  await delay(READ_DELAY_MS);
+  return mockCompanies.map((c) => ({ ...c }));
+}
+
+let mockActiveCompanyId: string | null = null;
+
+export function setActiveCompany(companyId: string): void {
+  // Mock data is a single fixed set, so this only drives the company dropdown.
+  mockActiveCompanyId = companyId;
+}
+
+export function getActiveCompanyId(): string | null {
+  return mockActiveCompanyId;
 }
 
 export async function getItemAvailability(itemNo: string, locationCode: string): Promise<ItemAvailability> {
