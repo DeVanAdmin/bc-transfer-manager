@@ -8,6 +8,7 @@ import { getDevRole } from './hooks/useUserRole';
 import CoordinatorView from './views/CoordinatorView';
 import OriginView from './views/OriginView';
 import DestinationView from './views/DestinationView';
+import TransferOrderDetail from './views/TransferOrderDetail';
 import DiagnosticView from './views/DiagnosticView';
 
 const devNavStyle: React.CSSProperties = {
@@ -94,6 +95,14 @@ export default function App() {
           element={
             <AuthGuard requiredRole="destination">
               <DestinationView />
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/destination/orders/:orderId"
+          element={
+            <AuthGuard requiredRole="destination">
+              <TransferOrderDetail />
             </AuthGuard>
           }
         />
