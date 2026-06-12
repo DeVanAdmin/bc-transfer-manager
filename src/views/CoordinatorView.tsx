@@ -6,6 +6,7 @@ import {
   getLocations,
   getTransferOrderLines,
   getTransferOrders,
+  getTransferSourceDiagnostic,
   setActiveCompany,
   type Company,
   type Location,
@@ -109,6 +110,7 @@ export default function CoordinatorView() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
+  const [sourceDiag, setSourceDiag] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
@@ -147,6 +149,7 @@ export default function CoordinatorView() {
       setSelectedCompanyId(sel);
       setOrders(o);
       setLocations(l);
+      setSourceDiag(getTransferSourceDiagnostic());
     })()
       .catch((e: unknown) => {
         if (!alive) return;
@@ -328,6 +331,18 @@ export default function CoordinatorView() {
           Showing {filteredOrders.length} of {orders.length} orders
         </span>
       </div>
+
+      {/* TEMP data-source diagnostic — remove once the order source is settled */}
+      {sourceDiag && (
+        <div style={{
+          fontSize: 12, color: '#6b7280',
+          fontFamily: 'ui-monospace, Menlo, Monaco, monospace',
+          background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 6,
+          padding: '6px 10px', marginBottom: 12, wordBreak: 'break-word',
+        }}>
+          data source: {sourceDiag}
+        </div>
+      )}
 
       {/* Table */}
       <table style={tableStyle}>

@@ -90,23 +90,38 @@ async function fetchAllRows<T>(
   return { ok: true, rows: all };
 }
 
+// TEMP diagnostic: records which source served the order list and how many
+// rows each returned, so the UI can show it. Remove once the source is settled.
+let transferSourceDiag = '';
+export function getTransferSourceDiagnostic(): string {
+  return transferSourceDiag;
+}
+
 export async function getTransferOrders(): Promise<TransferOrder[]> {
-  const { env, companyId } = await getBCContext();
+  const { env, companyId, companyName } = await getBCContext();
   const dataset = getBCDataset();
 
   // Try the custom, unfiltered Transfer Order API first.
-  let result = await fetchAllRows((top, skip) =>
+  const custom = await fetchAllRows((top, skip) =>
     Dynamics365BusinessCentralService.GetItemsV3(
       env, companyId, TRANSFER_API_DATASET, TRANSFER_API_TABLE, undefined, undefined, undefined, top, skip,
     ),
   );
-  // Fall back to the standard entity if the custom API isn't reachable.
-  if (!result.ok) {
-    result = await fetchAllRows((top, skip) =>
+
+  let result = custom;
+  if (custom.ok) {
+    transferSourceDiag = `company "${companyName}" · custom ${TRANSFER_API_DATASET}/${TRANSFER_API_TABLE} → ${custom.rows.length} orders`;
+  } else {
+    // Fall back to the standard entity if the custom API isn't reachable.
+    const fallback = await fetchAllRows((top, skip) =>
       Dynamics365BusinessCentralService.GetItemsV3(
         env, companyId, dataset, 'transferOrders', undefined, undefined, undefined, top, skip,
       ),
     );
+    result = fallback;
+    transferSourceDiag =
+      `company "${companyName}" · custom FAILED (${custom.error}) → fallback v2.0/transferOrders ` +
+      `→ ${fallback.ok ? `${fallback.rows.length} orders` : `FAILED (${fallback.error})`}`;
   }
   if (!result.ok) {
     throw new Error(`getTransferOrders failed: ${result.error}`);

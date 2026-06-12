@@ -11,6 +11,7 @@ export const getItems              = impl.getItems;
 export const getCompanies          = impl.getCompanies;
 export const setActiveCompany      = impl.setActiveCompany;
 export const getActiveCompanyId    = impl.getActiveCompanyId;
+export const getTransferSourceDiagnostic = impl.getTransferSourceDiagnostic;
 export const getItemAvailability   = impl.getItemAvailability;
 export const postShipment          = impl.postShipment;
 export const postReceipt           = impl.postReceipt;
