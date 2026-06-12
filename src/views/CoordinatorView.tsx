@@ -2,13 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { ItemRow, LoadingState, LocationTag, StatusBadge } from '../components/ui';
 import {
   getActiveCompanyId,
+  getActiveEnvironment,
   getCompanies,
+  getEnvironments,
   getLocations,
   getTransferOrderLines,
   getTransferOrders,
   getTransferSourceDiagnostic,
   setActiveCompany,
+  setActiveEnvironment,
   type Company,
+  type Environment,
   type Location,
   type TransferOrder,
   type TransferOrderLine,
@@ -110,6 +114,8 @@ export default function CoordinatorView() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
+  const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [selectedEnvKey, setSelectedEnvKey] = useState<string>('');
   const [sourceDiag, setSourceDiag] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -137,14 +143,17 @@ export default function CoordinatorView() {
     setError(null);
     let alive = true;
     (async () => {
-      // Resolve companies first so all subsequent queries are scoped to the
-      // chosen company (defaults to the stored selection, else the first one).
+      // Resolve environment first (scopes everything), then companies, so all
+      // subsequent queries hit the right environment + company.
+      const [envs, activeEnv] = await Promise.all([getEnvironments(), getActiveEnvironment()]);
       const cos = await getCompanies();
       const active = getActiveCompanyId();
       const sel = cos.find((c) => c.id === active)?.id ?? cos[0]?.id ?? '';
       if (sel) setActiveCompany(sel);
       const [o, l] = await Promise.all([getTransferOrders(), getLocations()]);
       if (!alive) return;
+      setEnvironments(envs);
+      setSelectedEnvKey(activeEnv.key);
       setCompanies(cos);
       setSelectedCompanyId(sel);
       setOrders(o);
@@ -163,6 +172,16 @@ export default function CoordinatorView() {
     setActiveCompany(companyId);
     setSelectedCompanyId(companyId);
     // Clear any expanded rows since their lines belong to the previous company.
+    setExpandedOrderId(null);
+    setExpandedLines({});
+    load();
+  };
+
+  const onEnvironmentChange = (key: string) => {
+    setActiveEnvironment(key);
+    setSelectedEnvKey(key);
+    // Companies (and their orders/lines) belong to the previous environment.
+    setSelectedCompanyId('');
     setExpandedOrderId(null);
     setExpandedLines({});
     load();
@@ -255,6 +274,18 @@ export default function CoordinatorView() {
           <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>All locations — live overview</p>
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          {environments.length > 1 && (
+            <select
+              aria-label="Environment"
+              style={selectStyle}
+              value={selectedEnvKey}
+              onChange={(e) => onEnvironmentChange(e.target.value)}
+            >
+              {environments.map((env) => (
+                <option key={env.key} value={env.key}>{env.name}</option>
+              ))}
+            </select>
+          )}
           {companies.length > 0 && (
             <select
               aria-label="Company"

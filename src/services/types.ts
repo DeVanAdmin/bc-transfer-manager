@@ -33,6 +33,11 @@ export interface Company {
   name: string;
 }
 
+export interface Environment {
+  key: string;
+  name: string;
+}
+
 export interface ItemAvailability {
   itemNo: string;
   locationCode: string;

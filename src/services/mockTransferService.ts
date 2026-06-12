@@ -6,6 +6,7 @@ import type {
   NewTransferOrderLine,
   Item,
   Company,
+  Environment,
 } from './types';
 import {
   mockTransferOrders,
@@ -14,6 +15,7 @@ import {
   mockItemAvailability,
   mockItems,
   mockCompanies,
+  mockEnvironments,
 } from './mockData';
 
 const READ_DELAY_MS = 600;
@@ -59,6 +61,24 @@ export function setActiveCompany(companyId: string): void {
 
 export function getActiveCompanyId(): string | null {
   return mockActiveCompanyId;
+}
+
+let mockActiveEnvKey: string | null = null;
+
+export async function getEnvironments(): Promise<Environment[]> {
+  await delay(READ_DELAY_MS);
+  return mockEnvironments.map((e) => ({ ...e }));
+}
+
+export async function getActiveEnvironment(): Promise<Environment> {
+  await delay(0);
+  return mockEnvironments.find((e) => e.key === mockActiveEnvKey) ?? mockEnvironments[0];
+}
+
+export function setActiveEnvironment(key: string): void {
+  // Mock data is a single fixed set; switching only drives the dropdown.
+  mockActiveEnvKey = key;
+  mockActiveCompanyId = null;
 }
 
 export function getTransferSourceDiagnostic(): string {

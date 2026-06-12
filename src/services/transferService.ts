@@ -1,6 +1,13 @@
 import { Dynamics365BusinessCentralService, BCTransferManager_CreateTransferOrderService } from '../generated';
 import { getBCContext, getBCDataset } from './bcContext';
-export { getCompanies, setActiveCompany, getActiveCompanyId } from './bcContext';
+export {
+  getCompanies,
+  setActiveCompany,
+  getActiveCompanyId,
+  getEnvironments,
+  getActiveEnvironment,
+  setActiveEnvironment,
+} from './bcContext';
 import type {
   TransferOrder,
   TransferOrderLine,
