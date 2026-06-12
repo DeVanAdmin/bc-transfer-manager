@@ -57,30 +57,13 @@ async function unwrap<T>(
   return res.data?.value ?? [];
 }
 
-// The custom "Transfer Order API" page (page 70000) exposes the full Transfer
-// Header table with no filter, via route devan/transferManager/v1.0. The
-// standard v2.0/transferOrders entity returns only a subset. The connector
-// path treats {dataset} as one segment and the SDK single-encodes it, so a
-// route with slashes 404s. PROBE several encodings to find the one that works;
-// the diagnostic reports each attempt's row count / HTTP code.
-// 'enc' (single pre-encode of the slashes) is the dataset format that reaches
-// BC. Remaining unknown is the entity/table identifier, so probe variants.
-const ENC_DATASET = 'devan%2FtransferManager%2Fv1.0';
-const CUSTOM_API_CANDIDATES: { dataset: string; table: string; label: string }[] = [
-  { dataset: ENC_DATASET, table: 'transferOrderActions', label: 'Actions' },
-  { dataset: ENC_DATASET, table: 'transferOrderAction', label: 'Action' },
-  { dataset: 'v1.0', table: 'transferOrderActions', label: 'v1.0/Actions' },
-];
+// Custom "Transfer Order API" page (page 70000) — the full, unfiltered Transfer
+// Header table via route devan/transferManager/v1.0. The connector treats
+// {dataset} as a single path segment, so the route's slashes must be
+// pre-encoded (otherwise the URL breaks and 404s).
+const CUSTOM_API_DATASET = 'devan%2FtransferManager%2Fv1.0';
+const CUSTOM_API_TABLE = 'transferOrderActions';
 const PAGE_SIZE = 5000;
-
-function shortErr(e: string): string {
-  const code = /"(?:status|code)"\s*:\s*"?(\d+)"?/.exec(e);
-  const msg = /"message"\s*:\s*"([^"]+)"/.exec(e);
-  const parts: string[] = [];
-  if (code) parts.push(`HTTP ${code[1]}`);
-  if (msg) parts.push(msg[1]);
-  return parts.length ? parts.join(' — ') : e.slice(0, 90);
-}
 
 type PagedResult<T> = { ok: true; rows: T[] } | { ok: false; error: string };
 
@@ -107,8 +90,7 @@ async function fetchAllRows<T>(
   return { ok: true, rows: all };
 }
 
-// TEMP diagnostic: records which source served the order list and how many
-// rows each returned, so the UI can show it. Remove once the source is settled.
+// Slim diagnostic so the order count's source/environment is visible.
 let transferSourceDiag = '';
 export function getTransferSourceDiagnostic(): string {
   return transferSourceDiag;
@@ -118,47 +100,30 @@ export async function getTransferOrders(): Promise<TransferOrder[]> {
   const { env, companyId, companyName } = await getBCContext();
   const dataset = getBCDataset();
 
-  const attempts: string[] = [];
-  let chosenRows: unknown[] | null = null;
-  let chosenLabel = '';
-
-  // Probe each custom-API dataset encoding; first success wins.
-  for (const cand of CUSTOM_API_CANDIDATES) {
-    const res = await fetchAllRows<unknown>((top, skip) =>
-      Dynamics365BusinessCentralService.GetItemsV3(
-        env, companyId, cand.dataset, cand.table, undefined, undefined, undefined, top, skip,
-      ),
-    );
-    if (res.ok) {
-      attempts.push(`${cand.label}=${res.rows.length}`);
-      chosenRows = res.rows;
-      chosenLabel = `custom:${cand.label}`;
-      break;
-    }
-    attempts.push(`${cand.label}=${shortErr(res.error)}`);
-  }
-
-  // Fall back to the standard entity if no custom encoding worked.
-  if (chosenRows === null) {
-    const fb = await fetchAllRows<unknown>((top, skip) =>
+  // Custom Transfer Order API (full, unfiltered) where the extension is
+  // published; otherwise the standard entity.
+  let source = `custom ${CUSTOM_API_TABLE}`;
+  let result = await fetchAllRows<unknown>((top, skip) =>
+    Dynamics365BusinessCentralService.GetItemsV3(
+      env, companyId, CUSTOM_API_DATASET, CUSTOM_API_TABLE, undefined, undefined, undefined, top, skip,
+    ),
+  );
+  if (!result.ok) {
+    source = 'v2.0/transferOrders (fallback)';
+    result = await fetchAllRows<unknown>((top, skip) =>
       Dynamics365BusinessCentralService.GetItemsV3(
         env, companyId, dataset, 'transferOrders', undefined, undefined, undefined, top, skip,
       ),
     );
-    if (fb.ok) {
-      attempts.push(`v2.0=${fb.rows.length}`);
-      chosenRows = fb.rows;
-      chosenLabel = 'v2.0/transferOrders';
-    } else {
-      attempts.push(`v2.0=${shortErr(fb.error)}`);
-      transferSourceDiag = `company "${companyName}" · ALL FAILED · [${attempts.join(' | ')}]`;
-      throw new Error(`getTransferOrders failed: ${fb.error}`);
-    }
+  }
+  if (!result.ok) {
+    transferSourceDiag = `env "${env}" · company "${companyName}" · FAILED`;
+    throw new Error(`getTransferOrders failed: ${result.error}`);
   }
 
-  transferSourceDiag = `company "${companyName}" · using ${chosenLabel} · [${attempts.join(' | ')}]`;
+  transferSourceDiag = `env "${env}" · company "${companyName}" · ${source} → ${result.rows.length} orders`;
 
-  return chosenRows.map((row) => {
+  return result.rows.map((row) => {
     const r = recordOf(row);
     return {
       id: pickStr(r, 'id', 'systemId'),

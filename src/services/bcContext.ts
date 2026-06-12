@@ -27,13 +27,25 @@ export function getBCDataset(): string {
   return BC_API_DATASET;
 }
 
+// Which BC environment to use. GetEnvironmentsV3 returns multiple (e.g. a
+// Sandbox and Production); picking the first one landed us on Production, which
+// lacked both the data and the published extension. Target a named environment
+// (configurable), defaulting to the sandbox where the app is being built out.
+const DESIRED_ENV = ((import.meta.env.VITE_BC_ENVIRONMENT as string | undefined) ?? 'DeVanUnlimited').trim();
+
 function resolveEnv(): Promise<string> {
   if (!envPromise) {
     envPromise = (async () => {
       const envRes = await Dynamics365BusinessCentralService.GetEnvironmentsV3();
       if (!envRes.success) throw new Error(`GetEnvironmentsV3 failed: ${envRes.error?.message ?? 'unknown'}`);
-      const env = envRes.data?.value?.[0]?.UrlKey ?? envRes.data?.value?.[0]?.Name;
-      if (!env) throw new Error('No BC environment found.');
+      const envs = envRes.data?.value ?? [];
+      if (envs.length === 0) throw new Error('No BC environment found.');
+      const match = DESIRED_ENV
+        ? envs.find((e) => e.Name === DESIRED_ENV || e.UrlKey === DESIRED_ENV || e.DisplayableKey === DESIRED_ENV)
+        : undefined;
+      const chosen = match ?? envs[0];
+      const env = chosen.UrlKey ?? chosen.Name;
+      if (!env) throw new Error('No BC environment key found.');
       return env;
     })();
   }
