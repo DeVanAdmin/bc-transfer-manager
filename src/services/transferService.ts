@@ -59,11 +59,22 @@ async function unwrap<T>(
 
 // The custom "Transfer Order API" page (page 70000) exposes the full Transfer
 // Header table with no filter, via route devan/transferManager/v1.0. The
-// standard v2.0/transferOrders entity returns only a subset, which is why some
-// orders never showed. Prefer the custom API; fall back so we never regress.
-const TRANSFER_API_DATASET = 'devan/transferManager/v1.0';
+// standard v2.0/transferOrders entity returns only a subset. The connector
+// path treats {dataset} as one segment and the SDK single-encodes it, so a
+// route with slashes 404s. PROBE several encodings to find the one that works;
+// the diagnostic reports each attempt's row count / HTTP code.
 const TRANSFER_API_TABLE = 'transferOrderActions';
+const CUSTOM_API_CANDIDATES: { dataset: string; label: string }[] = [
+  { dataset: 'devan/transferManager/v1.0', label: 'raw' },
+  { dataset: 'devan%2FtransferManager%2Fv1.0', label: 'enc' },
+  { dataset: 'devan%252FtransferManager%252Fv1.0', label: 'enc2' },
+];
 const PAGE_SIZE = 5000;
+
+function shortErr(e: string): string {
+  const m = /"code"\s*:\s*"?(\d+)"?/.exec(e);
+  return m ? `HTTP ${m[1]}` : e.slice(0, 40);
+}
 
 type PagedResult<T> = { ok: true; rows: T[] } | { ok: false; error: string };
 
@@ -101,33 +112,47 @@ export async function getTransferOrders(): Promise<TransferOrder[]> {
   const { env, companyId, companyName } = await getBCContext();
   const dataset = getBCDataset();
 
-  // Try the custom, unfiltered Transfer Order API first.
-  const custom = await fetchAllRows((top, skip) =>
-    Dynamics365BusinessCentralService.GetItemsV3(
-      env, companyId, TRANSFER_API_DATASET, TRANSFER_API_TABLE, undefined, undefined, undefined, top, skip,
-    ),
-  );
+  const attempts: string[] = [];
+  let chosenRows: unknown[] | null = null;
+  let chosenLabel = '';
 
-  let result = custom;
-  if (custom.ok) {
-    transferSourceDiag = `company "${companyName}" · custom ${TRANSFER_API_DATASET}/${TRANSFER_API_TABLE} → ${custom.rows.length} orders`;
-  } else {
-    // Fall back to the standard entity if the custom API isn't reachable.
-    const fallback = await fetchAllRows((top, skip) =>
+  // Probe each custom-API dataset encoding; first success wins.
+  for (const cand of CUSTOM_API_CANDIDATES) {
+    const res = await fetchAllRows<unknown>((top, skip) =>
+      Dynamics365BusinessCentralService.GetItemsV3(
+        env, companyId, cand.dataset, TRANSFER_API_TABLE, undefined, undefined, undefined, top, skip,
+      ),
+    );
+    if (res.ok) {
+      attempts.push(`${cand.label}=${res.rows.length}`);
+      chosenRows = res.rows;
+      chosenLabel = `custom:${cand.label}`;
+      break;
+    }
+    attempts.push(`${cand.label}=${shortErr(res.error)}`);
+  }
+
+  // Fall back to the standard entity if no custom encoding worked.
+  if (chosenRows === null) {
+    const fb = await fetchAllRows<unknown>((top, skip) =>
       Dynamics365BusinessCentralService.GetItemsV3(
         env, companyId, dataset, 'transferOrders', undefined, undefined, undefined, top, skip,
       ),
     );
-    result = fallback;
-    transferSourceDiag =
-      `company "${companyName}" · custom FAILED (${custom.error}) → fallback v2.0/transferOrders ` +
-      `→ ${fallback.ok ? `${fallback.rows.length} orders` : `FAILED (${fallback.error})`}`;
-  }
-  if (!result.ok) {
-    throw new Error(`getTransferOrders failed: ${result.error}`);
+    if (fb.ok) {
+      attempts.push(`v2.0=${fb.rows.length}`);
+      chosenRows = fb.rows;
+      chosenLabel = 'v2.0/transferOrders';
+    } else {
+      attempts.push(`v2.0=${shortErr(fb.error)}`);
+      transferSourceDiag = `company "${companyName}" · ALL FAILED · [${attempts.join(' | ')}]`;
+      throw new Error(`getTransferOrders failed: ${fb.error}`);
+    }
   }
 
-  return result.rows.map((row) => {
+  transferSourceDiag = `company "${companyName}" · using ${chosenLabel} · [${attempts.join(' | ')}]`;
+
+  return chosenRows.map((row) => {
     const r = recordOf(row);
     return {
       id: pickStr(r, 'id', 'systemId'),
