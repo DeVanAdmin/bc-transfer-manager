@@ -63,17 +63,23 @@ async function unwrap<T>(
 // path treats {dataset} as one segment and the SDK single-encodes it, so a
 // route with slashes 404s. PROBE several encodings to find the one that works;
 // the diagnostic reports each attempt's row count / HTTP code.
-const TRANSFER_API_TABLE = 'transferOrderActions';
-const CUSTOM_API_CANDIDATES: { dataset: string; label: string }[] = [
-  { dataset: 'devan/transferManager/v1.0', label: 'raw' },
-  { dataset: 'devan%2FtransferManager%2Fv1.0', label: 'enc' },
-  { dataset: 'devan%252FtransferManager%252Fv1.0', label: 'enc2' },
+// 'enc' (single pre-encode of the slashes) is the dataset format that reaches
+// BC. Remaining unknown is the entity/table identifier, so probe variants.
+const ENC_DATASET = 'devan%2FtransferManager%2Fv1.0';
+const CUSTOM_API_CANDIDATES: { dataset: string; table: string; label: string }[] = [
+  { dataset: ENC_DATASET, table: 'transferOrderActions', label: 'Actions' },
+  { dataset: ENC_DATASET, table: 'transferOrderAction', label: 'Action' },
+  { dataset: 'v1.0', table: 'transferOrderActions', label: 'v1.0/Actions' },
 ];
 const PAGE_SIZE = 5000;
 
 function shortErr(e: string): string {
-  const m = /"code"\s*:\s*"?(\d+)"?/.exec(e);
-  return m ? `HTTP ${m[1]}` : e.slice(0, 40);
+  const code = /"(?:status|code)"\s*:\s*"?(\d+)"?/.exec(e);
+  const msg = /"message"\s*:\s*"([^"]+)"/.exec(e);
+  const parts: string[] = [];
+  if (code) parts.push(`HTTP ${code[1]}`);
+  if (msg) parts.push(msg[1]);
+  return parts.length ? parts.join(' — ') : e.slice(0, 90);
 }
 
 type PagedResult<T> = { ok: true; rows: T[] } | { ok: false; error: string };
@@ -120,7 +126,7 @@ export async function getTransferOrders(): Promise<TransferOrder[]> {
   for (const cand of CUSTOM_API_CANDIDATES) {
     const res = await fetchAllRows<unknown>((top, skip) =>
       Dynamics365BusinessCentralService.GetItemsV3(
-        env, companyId, cand.dataset, TRANSFER_API_TABLE, undefined, undefined, undefined, top, skip,
+        env, companyId, cand.dataset, cand.table, undefined, undefined, undefined, top, skip,
       ),
     );
     if (res.ok) {
