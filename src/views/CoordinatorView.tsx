@@ -1,21 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ItemRow, LoadingState, LocationTag, StatusBadge } from '../components/ui';
+import { useNavigate } from 'react-router-dom';
+import { LoadingState, LocationTag, StatusBadge } from '../components/ui';
 import {
   getActiveCompanyId,
   getActiveEnvironment,
   getCompanies,
   getEnvironments,
   getLocations,
-  getTransferOrderLines,
   getTransferOrders,
-  getTransferSourceDiagnostic,
   setActiveCompany,
   setActiveEnvironment,
   type Company,
   type Environment,
   type Location,
   type TransferOrder,
-  type TransferOrderLine,
 } from '../services';
 import NewTransferWizard from './NewTransferWizard';
 
@@ -110,19 +108,17 @@ const overduePillStyle: React.CSSProperties = {
 
 // ── component ─────────────────────────────────────────────────────────────────
 export default function CoordinatorView() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<TransferOrder[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [selectedEnvKey, setSelectedEnvKey] = useState<string>('');
-  const [sourceDiag, setSourceDiag] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
   const [locationFilter, setLocationFilter] = useState<string>('All');
-  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  const [expandedLines, setExpandedLines] = useState<Record<string, TransferOrderLine[]>>({});
   const [hoverRowId, setHoverRowId] = useState<string | null>(null);
   const [showWizard, setShowWizard] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -158,7 +154,6 @@ export default function CoordinatorView() {
       setSelectedCompanyId(sel);
       setOrders(o);
       setLocations(l);
-      setSourceDiag(getTransferSourceDiagnostic());
     })()
       .catch((e: unknown) => {
         if (!alive) return;
@@ -171,20 +166,19 @@ export default function CoordinatorView() {
   const onCompanyChange = (companyId: string) => {
     setActiveCompany(companyId);
     setSelectedCompanyId(companyId);
-    // Clear any expanded rows since their lines belong to the previous company.
-    setExpandedOrderId(null);
-    setExpandedLines({});
     load();
   };
 
   const onEnvironmentChange = (key: string) => {
     setActiveEnvironment(key);
     setSelectedEnvKey(key);
-    // Companies (and their orders/lines) belong to the previous environment.
+    // Companies/orders belong to the previous environment.
     setSelectedCompanyId('');
-    setExpandedOrderId(null);
-    setExpandedLines({});
     load();
+  };
+
+  const openOrder = (order: TransferOrder) => {
+    navigate(`/coordinator/orders/${encodeURIComponent(order.id)}`, { state: { order } });
   };
 
   useEffect(() => load(), []);
@@ -210,24 +204,6 @@ export default function CoordinatorView() {
     received: orders.filter((o) => o.status === 'Received').length,
   }), [orders]);
 
-  const onRowClick = (orderId: string) => {
-    if (expandedOrderId === orderId) {
-      setExpandedOrderId(null);
-      return;
-    }
-    setExpandedOrderId(orderId);
-    if (!expandedLines[orderId]) {
-      getTransferOrderLines(orderId)
-        .then((lines) => setExpandedLines((prev) => ({ ...prev, [orderId]: lines })))
-        .catch((e: unknown) => {
-          const msg = e instanceof Error ? e.message : String(e);
-          // Mark with an empty array so the panel renders "No line items found".
-          // Per-row errors aren't part of the spec; surface to console.
-          console.error(`Failed to load lines for ${orderId}: ${msg}`);
-          setExpandedLines((prev) => ({ ...prev, [orderId]: [] }));
-        });
-    }
-  };
 
   // ── error / loading shells ──
   if (error) {
@@ -363,18 +339,6 @@ export default function CoordinatorView() {
         </span>
       </div>
 
-      {/* TEMP data-source diagnostic — remove once the order source is settled */}
-      {sourceDiag && (
-        <div style={{
-          fontSize: 12, color: '#6b7280',
-          fontFamily: 'ui-monospace, Menlo, Monaco, monospace',
-          background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 6,
-          padding: '6px 10px', marginBottom: 12, wordBreak: 'break-word',
-        }}>
-          data source: {sourceDiag}
-        </div>
-      )}
-
       {/* Table */}
       <table style={tableStyle}>
         <thead>
@@ -398,19 +362,15 @@ export default function CoordinatorView() {
             </tr>
           ) : (
             filteredOrders.map((o) => {
-              const expanded = expandedOrderId === o.id;
-              const lines = expandedLines[o.id];
               const hovered = hoverRowId === o.id;
               return (
-                <FragmentRow
+                <OrderRow
                   key={o.id}
                   order={o}
-                  expanded={expanded}
-                  lines={lines}
                   hovered={hovered}
                   fromName={locByCode.get(o.fromLocationCode) ?? o.fromLocationCode}
                   toName={locByCode.get(o.toLocationCode) ?? o.toLocationCode}
-                  onClick={() => onRowClick(o.id)}
+                  onClick={() => openOrder(o)}
                   onHoverEnter={() => setHoverRowId(o.id)}
                   onHoverLeave={() => setHoverRowId(null)}
                 />
@@ -446,11 +406,9 @@ export default function CoordinatorView() {
   );
 }
 
-// ── row + expansion (separated to keep the main return readable) ──────────────
-interface FragmentRowProps {
+// ── order row (click navigates to the details screen) ────────────────────────
+interface OrderRowProps {
   order: TransferOrder;
-  expanded: boolean;
-  lines: TransferOrderLine[] | undefined;
   hovered: boolean;
   fromName: string;
   toName: string;
@@ -459,48 +417,22 @@ interface FragmentRowProps {
   onHoverLeave: () => void;
 }
 
-function FragmentRow({ order, expanded, lines, hovered, fromName, toName, onClick, onHoverEnter, onHoverLeave }: FragmentRowProps) {
+function OrderRow({ order, hovered, fromName, toName, onClick, onHoverEnter, onHoverLeave }: OrderRowProps) {
   const trStyle: React.CSSProperties = {
     background: hovered ? '#f9fafb' : undefined,
     cursor: 'pointer',
   };
   const overdue = isOverdue(order);
   return (
-    <>
-      <tr style={trStyle} onClick={onClick} onMouseEnter={onHoverEnter} onMouseLeave={onHoverLeave}>
-        <td style={{ ...tdStyle, fontWeight: 500, fontFamily: 'ui-monospace, Menlo, Monaco, monospace' }}>{order.no}</td>
-        <td style={tdStyle}><StatusBadge status={order.status} /></td>
-        <td style={tdStyle}><LocationTag name={fromName} direction="from" /></td>
-        <td style={tdStyle}><LocationTag name={toName} direction="to" /></td>
-        <td style={tdStyle}>{formatDate(order.shipmentDate)}</td>
-        <td style={tdStyle}>{formatDate(order.receiptDate)}</td>
-        <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280' }}>{order.lineCount}</td>
-        <td style={tdStyle}>{overdue ? <span style={overduePillStyle}>Overdue</span> : null}</td>
-      </tr>
-      {expanded && (
-        <tr>
-          <td colSpan={8} style={{ padding: '0 12px 16px', background: '#fafafa', borderBottom: '1px solid #f3f4f6' }}>
-            {lines === undefined ? (
-              <LoadingState message="Loading line items…" />
-            ) : lines.length === 0 ? (
-              <div style={{ color: '#6b7280', padding: '16px 0' }}>No line items found</div>
-            ) : (
-              <div style={{ padding: '8px 0' }}>
-                {lines.map((l) => (
-                  <ItemRow
-                    key={l.id}
-                    itemNo={l.itemNo}
-                    description={l.description}
-                    quantity={l.quantity}
-                    unit={l.unit}
-                    received={l.qtyReceived}
-                  />
-                ))}
-              </div>
-            )}
-          </td>
-        </tr>
-      )}
-    </>
+    <tr style={trStyle} onClick={onClick} onMouseEnter={onHoverEnter} onMouseLeave={onHoverLeave}>
+      <td style={{ ...tdStyle, fontWeight: 500, fontFamily: 'ui-monospace, Menlo, Monaco, monospace' }}>{order.no}</td>
+      <td style={tdStyle}><StatusBadge status={order.status} /></td>
+      <td style={tdStyle}><LocationTag name={fromName} direction="from" /></td>
+      <td style={tdStyle}><LocationTag name={toName} direction="to" /></td>
+      <td style={tdStyle}>{formatDate(order.shipmentDate)}</td>
+      <td style={tdStyle}>{formatDate(order.receiptDate)}</td>
+      <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280' }}>{order.lineCount}</td>
+      <td style={tdStyle}>{overdue ? <span style={overduePillStyle}>Overdue</span> : null}</td>
+    </tr>
   );
 }

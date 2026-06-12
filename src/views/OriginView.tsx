@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ItemRow, LoadingState, LocationTag, StatusBadge } from '../components/ui';
+import { useNavigate } from 'react-router-dom';
+import { LoadingState, LocationTag, StatusBadge } from '../components/ui';
 import {
   getLocations,
-  getTransferOrderLines,
   getTransferOrders,
-  postShipment,
   type Location,
   type TransferOrder,
-  type TransferOrderLine,
 } from '../services';
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -70,74 +68,17 @@ const sectionLabelStyle: React.CSSProperties = {
   marginBottom: 12,
 };
 
-const openCardStyle: React.CSSProperties = {
-  background: '#ffffff',
-  border: '1px solid #e5e7eb',
-  borderRadius: 10,
-  padding: 16,
-  marginBottom: 12,
-  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-};
-
-const shippedCardStyle: React.CSSProperties = {
-  background: '#ffffff',
-  border: '1px solid #e5e7eb',
-  borderRadius: 10,
-  padding: '12px 16px',
-  marginBottom: 12,
-  display: 'flex',
-  alignItems: 'center',
-  gap: 16,
-  flexWrap: 'wrap',
-};
-
-const primaryButtonStyle: React.CSSProperties = {
-  background: '#1d4ed8',
-  color: '#ffffff',
-  padding: '8px 20px',
-  borderRadius: 6,
-  fontSize: 14,
-  fontWeight: 500,
-  border: 'none',
-  cursor: 'pointer',
-};
-
-const cancelButtonStyle: React.CSSProperties = {
-  background: '#ffffff',
-  border: '1px solid #d1d5db',
-  color: '#374151',
-  padding: '8px 20px',
-  borderRadius: 6,
-  fontSize: 14,
-  fontWeight: 500,
-  cursor: 'pointer',
-};
-
-const showItemsButtonStyle: React.CSSProperties = {
-  background: 'transparent',
-  border: '1px solid #d1d5db',
-  color: '#374151',
-  padding: '4px 12px',
-  borderRadius: 6,
-  fontSize: 13,
-  cursor: 'pointer',
-};
-
 const arrowStyle: React.CSSProperties = { color: '#9ca3af', fontSize: 16 };
 
 // ── component ────────────────────────────────────────────────────────────────
 export default function OriginView() {
+  const navigate = useNavigate();
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [locations, setLocations] = useState<Location[]>([]);
   const [orders, setOrders] = useState<TransferOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  const [expandedLines, setExpandedLines] = useState<Record<string, TransferOrderLine[]>>({});
-  const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
-  const [postingOrderId, setPostingOrderId] = useState<string | null>(null);
-  const [postError, setPostError] = useState<string | null>(null);
-  const [hoverButtonId, setHoverButtonId] = useState<string | null>(null);
+  const [hoverId, setHoverId] = useState<string | null>(null);
 
   // Load locations once for the dropdown
   useEffect(() => {
@@ -188,54 +129,54 @@ export default function OriginView() {
     [fromHere, today],
   );
 
-  const onToggleItems = (orderId: string) => {
-    if (expandedOrderId === orderId) {
-      setExpandedOrderId(null);
-      return;
-    }
-    setExpandedOrderId(orderId);
-    if (!expandedLines[orderId]) {
-      getTransferOrderLines(orderId)
-        .then((lines) => setExpandedLines((prev) => ({ ...prev, [orderId]: lines })))
-        .catch((e: unknown) => {
-          console.error(`Failed to load lines for ${orderId}:`, e);
-          setExpandedLines((prev) => ({ ...prev, [orderId]: [] }));
-        });
-    }
+  const openOrder = (order: TransferOrder) => {
+    navigate(`/origin/orders/${encodeURIComponent(order.id)}`, { state: { order } });
   };
 
-  const onStartConfirm = (orderId: string) => {
-    setConfirmingOrderId(orderId);
-    setPostError(null);
+  const renderCard = (order: TransferOrder, action: string, dateLabel: string, dateValue: string) => {
+    const hovered = hoverId === order.id;
+    return (
+      <div
+        key={order.id}
+        role="button"
+        tabIndex={0}
+        onClick={() => openOrder(order)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openOrder(order); } }}
+        onMouseEnter={() => setHoverId(order.id)}
+        onMouseLeave={() => setHoverId(null)}
+        style={{
+          background: '#ffffff',
+          border: `1px solid ${hovered ? '#1d4ed8' : '#e5e7eb'}`,
+          borderRadius: 10,
+          padding: 16,
+          marginBottom: 12,
+          boxShadow: hovered ? '0 2px 8px rgba(29,78,216,0.10)' : '0 1px 3px rgba(0,0,0,0.06)',
+          cursor: 'pointer',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontFamily: 'ui-monospace, Menlo, Monaco, monospace', fontSize: 15, fontWeight: 600, color: '#111827' }}>
+            {order.no}
+          </span>
+          <StatusBadge status={order.status} />
+        </div>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+          <LocationTag name={locByCode.get(order.fromLocationCode) ?? order.fromLocationCode} direction="from" />
+          <span style={arrowStyle}>→</span>
+          <LocationTag name={locByCode.get(order.toLocationCode) ?? order.toLocationCode} direction="to" />
+          <span style={{ marginLeft: 'auto', fontSize: 12, color: '#6b7280' }}>
+            {dateLabel}: <span style={{ color: '#374151' }}>{formatDate(dateValue)}</span>
+          </span>
+        </div>
+        <div style={{ marginTop: 10, fontSize: 13, color: hovered ? '#1d4ed8' : '#6b7280', textAlign: 'right' }}>
+          {action} →
+        </div>
+      </div>
+    );
   };
 
-  const onCancelConfirm = () => {
-    setConfirmingOrderId(null);
-    setPostError(null);
-  };
-
-  const onConfirmShipment = async (order: TransferOrder) => {
-    setPostingOrderId(order.id);
-    setPostError(null);
-    try {
-      await postShipment(order.id);
-      setOrders((prev) =>
-        prev.map((o) =>
-          o.id === order.id ? { ...o, status: 'In Transit', shipmentDate: todayYMD() } : o,
-        ),
-      );
-      setConfirmingOrderId(null);
-    } catch (e) {
-      setPostError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setPostingOrderId(null);
-    }
-  };
-
-  // ── render ──
   return (
     <main style={pageStyle}>
-      {/* Location selector */}
       <div style={selectorBarStyle}>
         <label htmlFor="origin-loc" style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>
           Your warehouse:
@@ -244,12 +185,7 @@ export default function OriginView() {
           id="origin-loc"
           style={selectStyle}
           value={selectedLocation}
-          onChange={(e) => {
-            setSelectedLocation(e.target.value);
-            setExpandedOrderId(null);
-            setConfirmingOrderId(null);
-            setPostError(null);
-          }}
+          onChange={(e) => setSelectedLocation(e.target.value)}
         >
           <option value="">Select your warehouse...</option>
           {locations.map((l) => (
@@ -281,224 +217,27 @@ export default function OriginView() {
             <LoadingState message="Loading transfer orders…" />
           ) : (
             <>
-              {/* Needs action */}
               <div style={sectionLabelStyle}>Needs action</div>
               {needsAction.length === 0 ? (
                 <div style={{ fontSize: 14, color: '#6b7280', marginBottom: 16 }}>
                   No open transfer orders for this location
                 </div>
               ) : (
-                needsAction.map((o) => (
-                  <OpenOrderCard
-                    key={o.id}
-                    order={o}
-                    fromName={locByCode.get(o.fromLocationCode) ?? o.fromLocationCode}
-                    toName={locByCode.get(o.toLocationCode) ?? o.toLocationCode}
-                    expanded={expandedOrderId === o.id}
-                    lines={expandedLines[o.id]}
-                    confirming={confirmingOrderId === o.id}
-                    posting={postingOrderId === o.id}
-                    postError={confirmingOrderId === o.id ? postError : null}
-                    hoverButtonId={hoverButtonId}
-                    onToggleItems={() => onToggleItems(o.id)}
-                    onStartConfirm={() => onStartConfirm(o.id)}
-                    onCancelConfirm={onCancelConfirm}
-                    onConfirm={() => onConfirmShipment(o)}
-                    onHoverEnter={(id) => setHoverButtonId(id)}
-                    onHoverLeave={() => setHoverButtonId(null)}
-                  />
-                ))
+                needsAction.map((o) => renderCard(o, 'Ship', 'Due', o.receiptDate))
               )}
 
-              {/* Shipped */}
               <div style={{ ...sectionLabelStyle, marginTop: 32 }}>Shipped</div>
               {shipped.length === 0 ? (
                 <div style={{ fontSize: 14, color: '#6b7280' }}>
                   No outbound shipments yet
                 </div>
               ) : (
-                shipped.map((o) => (
-                  <ShippedCard
-                    key={o.id}
-                    order={o}
-                    toName={locByCode.get(o.toLocationCode) ?? o.toLocationCode}
-                  />
-                ))
+                shipped.map((o) => renderCard(o, 'View', 'Shipped', o.shipmentDate))
               )}
             </>
           )}
         </>
       )}
     </main>
-  );
-}
-
-// ── sub-components ───────────────────────────────────────────────────────────
-interface OpenOrderCardProps {
-  order: TransferOrder;
-  fromName: string;
-  toName: string;
-  expanded: boolean;
-  lines: TransferOrderLine[] | undefined;
-  confirming: boolean;
-  posting: boolean;
-  postError: string | null;
-  hoverButtonId: string | null;
-  onToggleItems: () => void;
-  onStartConfirm: () => void;
-  onCancelConfirm: () => void;
-  onConfirm: () => void;
-  onHoverEnter: (id: string) => void;
-  onHoverLeave: () => void;
-}
-
-function OpenOrderCard({
-  order,
-  fromName,
-  toName,
-  expanded,
-  lines,
-  confirming,
-  posting,
-  postError,
-  hoverButtonId,
-  onToggleItems,
-  onStartConfirm,
-  onCancelConfirm,
-  onConfirm,
-  onHoverEnter,
-  onHoverLeave,
-}: OpenOrderCardProps) {
-  const confirmHoverId = `confirm-${order.id}`;
-  const yesHoverId = `yes-${order.id}`;
-  const confirmStyle: React.CSSProperties = {
-    ...primaryButtonStyle,
-    background: hoverButtonId === confirmHoverId ? '#1e40af' : '#1d4ed8',
-  };
-  const yesStyle: React.CSSProperties = {
-    ...primaryButtonStyle,
-    background: hoverButtonId === yesHoverId ? '#1e40af' : '#1d4ed8',
-    opacity: posting ? 0.7 : 1,
-    cursor: posting ? 'wait' : 'pointer',
-  };
-
-  return (
-    <div style={openCardStyle}>
-      {/* Header row */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontFamily: 'ui-monospace, Menlo, Monaco, monospace', fontSize: 15, fontWeight: 600, color: '#111827' }}>
-          {order.no}
-        </span>
-        <StatusBadge status={order.status} />
-      </div>
-
-      {/* Route row */}
-      <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-        <LocationTag name={fromName} direction="from" />
-        <span style={arrowStyle}>→</span>
-        <LocationTag name={toName} direction="to" />
-        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#6b7280' }}>
-          Due: <span style={{ color: '#374151' }}>{formatDate(order.receiptDate)}</span>
-        </span>
-      </div>
-
-      {/* Items toggle */}
-      <div style={{ marginTop: 12 }}>
-        <button type="button" style={showItemsButtonStyle} onClick={onToggleItems}>
-          {expanded ? 'Hide items' : `Show items (${order.lineCount})`}
-        </button>
-        {expanded && (
-          <div style={{ marginTop: 8 }}>
-            {lines === undefined ? (
-              <LoadingState message="Loading line items…" />
-            ) : lines.length === 0 ? (
-              <div style={{ color: '#6b7280', padding: '8px 0' }}>No line items found</div>
-            ) : (
-              lines.map((l) => (
-                <ItemRow
-                  key={l.id}
-                  itemNo={l.itemNo}
-                  description={l.description}
-                  quantity={l.quantity}
-                  unit={l.unit}
-                  received={l.qtyReceived}
-                />
-              ))
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Action row */}
-      <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #f3f4f6' }}>
-        {!confirming ? (
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button
-              type="button"
-              style={confirmStyle}
-              onClick={onStartConfirm}
-              onMouseEnter={() => onHoverEnter(confirmHoverId)}
-              onMouseLeave={onHoverLeave}
-            >
-              Confirm shipment
-            </button>
-          </div>
-        ) : (
-          <div>
-            <div style={{ fontSize: 14, color: '#111827', marginBottom: 12 }}>
-              Confirm shipment of <strong>{order.no}</strong> to <strong>{toName}</strong>?
-            </div>
-            {posting && (
-              <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>Posting...</div>
-            )}
-            {postError && (
-              <div style={{ color: '#991b1b', fontSize: 13, marginBottom: 12 }}>
-                {postError}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                style={cancelButtonStyle}
-                onClick={onCancelConfirm}
-                disabled={posting}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                style={yesStyle}
-                onClick={onConfirm}
-                disabled={posting}
-                onMouseEnter={() => onHoverEnter(yesHoverId)}
-                onMouseLeave={onHoverLeave}
-              >
-                {postError ? 'Try again' : 'Yes, ship it'}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-interface ShippedCardProps {
-  order: TransferOrder;
-  toName: string;
-}
-
-function ShippedCard({ order, toName }: ShippedCardProps) {
-  return (
-    <div style={shippedCardStyle}>
-      <span style={{ fontFamily: 'ui-monospace, Menlo, Monaco, monospace', fontSize: 14, fontWeight: 500, color: '#111827' }}>
-        {order.no}
-      </span>
-      <StatusBadge status="In Transit" />
-      <LocationTag name={toName} direction="to" />
-      <span style={{ marginLeft: 'auto', fontSize: 13, color: '#6b7280' }}>
-        Shipped: <span style={{ color: '#374151' }}>{formatDate(order.shipmentDate)}</span>
-      </span>
-    </div>
   );
 }

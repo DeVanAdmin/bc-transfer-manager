@@ -97,26 +97,18 @@ async function fetchAllRows<T>(
   return { ok: true, rows: all };
 }
 
-// Slim diagnostic so the order count's source/environment is visible.
-let transferSourceDiag = '';
-export function getTransferSourceDiagnostic(): string {
-  return transferSourceDiag;
-}
-
 export async function getTransferOrders(): Promise<TransferOrder[]> {
-  const { env, companyId, companyName } = await getBCContext();
+  const { env, companyId } = await getBCContext();
   const dataset = getBCDataset();
 
   // Custom Transfer Order API (full, unfiltered) where the extension is
   // published; otherwise the standard entity.
-  let source = `custom ${CUSTOM_API_TABLE}`;
   let result = await fetchAllRows<unknown>((top, skip) =>
     Dynamics365BusinessCentralService.GetItemsV3(
       env, companyId, CUSTOM_API_DATASET, CUSTOM_API_TABLE, undefined, undefined, undefined, top, skip,
     ),
   );
   if (!result.ok) {
-    source = 'v2.0/transferOrders (fallback)';
     result = await fetchAllRows<unknown>((top, skip) =>
       Dynamics365BusinessCentralService.GetItemsV3(
         env, companyId, dataset, 'transferOrders', undefined, undefined, undefined, top, skip,
@@ -124,11 +116,8 @@ export async function getTransferOrders(): Promise<TransferOrder[]> {
     );
   }
   if (!result.ok) {
-    transferSourceDiag = `env "${env}" · company "${companyName}" · FAILED`;
     throw new Error(`getTransferOrders failed: ${result.error}`);
   }
-
-  transferSourceDiag = `env "${env}" · company "${companyName}" · ${source} → ${result.rows.length} orders`;
 
   return result.rows.map((row) => {
     const r = recordOf(row);

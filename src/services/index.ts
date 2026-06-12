@@ -14,7 +14,6 @@ export const getActiveCompanyId    = impl.getActiveCompanyId;
 export const getEnvironments       = impl.getEnvironments;
 export const getActiveEnvironment  = impl.getActiveEnvironment;
 export const setActiveEnvironment  = impl.setActiveEnvironment;
-export const getTransferSourceDiagnostic = impl.getTransferSourceDiagnostic;
 export const getItemAvailability   = impl.getItemAvailability;
 export const postShipment          = impl.postShipment;
 export const postReceipt           = impl.postReceipt;

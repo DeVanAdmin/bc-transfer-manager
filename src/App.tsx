@@ -83,10 +83,26 @@ export default function App() {
           }
         />
         <Route
+          path="/coordinator/orders/:orderId"
+          element={
+            <AuthGuard requiredRole="coordinator">
+              <TransferOrderDetail mode="view" />
+            </AuthGuard>
+          }
+        />
+        <Route
           path="/origin"
           element={
             <AuthGuard requiredRole="origin">
               <OriginView />
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/origin/orders/:orderId"
+          element={
+            <AuthGuard requiredRole="origin">
+              <TransferOrderDetail mode="ship" />
             </AuthGuard>
           }
         />
@@ -102,7 +118,7 @@ export default function App() {
           path="/destination/orders/:orderId"
           element={
             <AuthGuard requiredRole="destination">
-              <TransferOrderDetail />
+              <TransferOrderDetail mode="receive" />
             </AuthGuard>
           }
         />

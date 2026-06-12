@@ -6,10 +6,13 @@ import {
   getTransferOrderLines,
   getTransferOrders,
   postReceipt,
+  postShipment,
   type Location,
   type TransferOrder,
   type TransferOrderLine,
 } from '../services';
+
+type DetailMode = 'receive' | 'ship' | 'view';
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -24,6 +27,12 @@ function formatDate(value: string): string {
   if (isNaN(d.getTime())) return value;
   return `${MONTH_SHORT[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
+
+const MODE_CONFIG: Record<DetailMode, { backTo: string; backLabel: string; accent: string; accentHover: string }> = {
+  receive: { backTo: '/destination', backLabel: '← Back to inbound transfers', accent: '#059669', accentHover: '#047857' },
+  ship: { backTo: '/origin', backLabel: '← Back to outbound transfers', accent: '#1d4ed8', accentHover: '#1e40af' },
+  view: { backTo: '/coordinator', backLabel: '← Back to orders', accent: '#1d4ed8', accentHover: '#1e40af' },
+};
 
 // ── styles ───────────────────────────────────────────────────────────────────
 const pageStyle: React.CSSProperties = {
@@ -64,17 +73,6 @@ const sectionLabelStyle: React.CSSProperties = {
   marginBottom: 12,
 };
 
-const primaryButtonStyle: React.CSSProperties = {
-  background: '#059669',
-  color: '#ffffff',
-  padding: '8px 20px',
-  borderRadius: 6,
-  fontSize: 14,
-  fontWeight: 500,
-  border: 'none',
-  cursor: 'pointer',
-};
-
 const cancelButtonStyle: React.CSSProperties = {
   background: '#ffffff',
   border: '1px solid #d1d5db',
@@ -98,11 +96,12 @@ const inputStyle = (state: 'ok' | 'short' | 'zero'): React.CSSProperties => ({
 const arrowStyle: React.CSSProperties = { color: '#9ca3af', fontSize: 16 };
 
 // ── component ────────────────────────────────────────────────────────────────
-export default function TransferOrderDetail() {
+export default function TransferOrderDetail({ mode }: { mode: DetailMode }) {
   const { orderId = '' } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const passedOrder = (location.state as { order?: TransferOrder } | null)?.order;
+  const cfg = MODE_CONFIG[mode];
 
   const [order, setOrder] = useState<TransferOrder | null>(passedOrder ?? null);
   const [lines, setLines] = useState<TransferOrderLine[] | null>(null);
@@ -120,8 +119,6 @@ export default function TransferOrderDetail() {
     setLoading(true);
     setError(null);
     (async () => {
-      // Resolve the order (from nav state, else fetch and find by id) plus its
-      // lines and the location names.
       const [locs, lns, ord] = await Promise.all([
         getLocations(),
         getTransferOrderLines(orderId),
@@ -158,13 +155,18 @@ export default function TransferOrderDetail() {
     setReceiptQuantities((prev) => ({ ...prev, [lineId]: Math.max(0, Math.min(max, Math.floor(n))) }));
   };
 
-  const onConfirmReceipt = async () => {
-    if (!order || !lines) return;
+  const onConfirm = async () => {
+    if (!order) return;
     setPosting(true);
     setPostError(null);
     try {
-      await postReceipt(order.id, lines.map((l) => ({ lineNo: l.lineNo, qtyReceived: receiptQuantities[l.id] ?? l.quantity })));
-      navigate('/destination');
+      if (mode === 'receive') {
+        const lns = lines ?? [];
+        await postReceipt(order.id, lns.map((l) => ({ lineNo: l.lineNo, qtyReceived: receiptQuantities[l.id] ?? l.quantity })));
+      } else if (mode === 'ship') {
+        await postShipment(order.id);
+      }
+      navigate(cfg.backTo);
     } catch (e) {
       setPostError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -173,8 +175,8 @@ export default function TransferOrderDetail() {
   };
 
   const back = (
-    <button type="button" style={backButtonStyle} onClick={() => navigate('/destination')}>
-      ← Back to inbound transfers
+    <button type="button" style={backButtonStyle} onClick={() => navigate(cfg.backTo)}>
+      {cfg.backLabel}
     </button>
   );
 
@@ -191,18 +193,22 @@ export default function TransferOrderDetail() {
   if (!order) {
     return (
       <main style={pageStyle}>{back}
-        <div style={{ color: '#6b7280', padding: '40px 0', textAlign: 'center' }}>
-          Transfer order not found.
-        </div>
+        <div style={{ color: '#6b7280', padding: '40px 0', textAlign: 'center' }}>Transfer order not found.</div>
       </main>
     );
   }
 
-  const canReceive = order.status === 'In Transit';
+  const canReceive = mode === 'receive' && order.status === 'In Transit';
+  const canShip = mode === 'ship' && order.status === 'Open';
+  const showAction = canReceive || canShip;
   const discrepancyCount = (lines ?? []).reduce(
     (acc, l) => acc + ((receiptQuantities[l.id] ?? l.quantity) !== l.quantity ? 1 : 0),
     0,
   );
+  const primaryButtonStyle: React.CSSProperties = {
+    background: cfg.accent, color: '#ffffff', padding: '8px 20px', borderRadius: 6,
+    fontSize: 14, fontWeight: 500, border: 'none', cursor: 'pointer',
+  };
 
   return (
     <main style={pageStyle}>
@@ -245,7 +251,9 @@ export default function TransferOrderDetail() {
                 <div style={{ fontFamily: 'ui-monospace, Menlo, Monaco, monospace', fontSize: 12, color: '#6b7280' }}>{l.itemNo}</div>
                 <div style={{ fontSize: 14, color: '#111827', marginTop: 2 }}>{l.description}</div>
               </div>
-              <div style={{ fontSize: 13, color: '#6b7280', whiteSpace: 'nowrap' }}>Expected: {l.quantity} {l.unit}</div>
+              <div style={{ fontSize: 13, color: '#6b7280', whiteSpace: 'nowrap' }}>
+                {canReceive ? 'Expected' : 'Qty'}: {l.quantity} {l.unit}
+              </div>
               {canReceive ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <label style={{ fontSize: 12, color: '#6b7280' }} htmlFor={`qty-${l.id}`}>Received:</label>
@@ -259,29 +267,33 @@ export default function TransferOrderDetail() {
                     style={inputStyle(state)}
                   />
                 </div>
-              ) : (
+              ) : l.qtyReceived > 0 ? (
                 <div style={{ fontSize: 13, color: '#374151', whiteSpace: 'nowrap' }}>Received: {l.qtyReceived}</div>
-              )}
+              ) : null}
             </div>
           );
         })
       )}
 
-      {/* Receive action */}
-      {canReceive && lines && lines.length > 0 && (
+      {/* Action */}
+      {showAction && lines && (
         <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid #f3f4f6' }}>
-          {discrepancyCount > 0 && (
+          {canReceive && discrepancyCount > 0 && (
             <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#92400e' }}>
               ⚠ {discrepancyCount} line(s) with quantity discrepancies. These will be recorded in BC.
             </div>
           )}
-          {postError && (
-            <div style={{ color: '#991b1b', fontSize: 13, marginBottom: 12 }}>{postError}</div>
+          {confirming && canShip && (
+            <div style={{ fontSize: 14, color: '#111827', marginBottom: 12 }}>
+              Confirm shipment of <strong>{order.no}</strong> to{' '}
+              <strong>{locByCode.get(order.toLocationCode) ?? order.toLocationCode}</strong>?
+            </div>
           )}
+          {postError && <div style={{ color: '#991b1b', fontSize: 13, marginBottom: 12 }}>{postError}</div>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             {!confirming ? (
               <button type="button" style={primaryButtonStyle} onClick={() => setConfirming(true)}>
-                Confirm receipt
+                {canReceive ? 'Confirm receipt' : 'Confirm shipment'}
               </button>
             ) : (
               <>
@@ -291,10 +303,10 @@ export default function TransferOrderDetail() {
                 <button
                   type="button"
                   style={{ ...primaryButtonStyle, opacity: posting ? 0.7 : 1, cursor: posting ? 'wait' : 'pointer' }}
-                  onClick={onConfirmReceipt}
+                  onClick={onConfirm}
                   disabled={posting}
                 >
-                  {posting ? 'Posting…' : postError ? 'Try again' : 'Yes, post receipt'}
+                  {posting ? 'Posting…' : postError ? 'Try again' : canReceive ? 'Yes, post receipt' : 'Yes, ship it'}
                 </button>
               </>
             )}

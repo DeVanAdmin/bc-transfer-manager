@@ -81,10 +81,6 @@ export function setActiveEnvironment(key: string): void {
   mockActiveCompanyId = null;
 }
 
-export function getTransferSourceDiagnostic(): string {
-  return `mock data → ${mockTransferOrders.length} orders`;
-}
-
 export async function getItemAvailability(itemNo: string, locationCode: string): Promise<ItemAvailability> {
   await delay(READ_DELAY_MS);
   const match = mockItemAvailability.find((a) => a.itemNo === itemNo && a.locationCode === locationCode);
