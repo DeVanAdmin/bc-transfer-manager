@@ -30,7 +30,7 @@ export async function getTransferOrders(): Promise<TransferOrder[]> {
   return mockTransferOrders.map((o) => ({ ...o }));
 }
 
-export async function getTransferOrderLines(orderId: string): Promise<TransferOrderLine[]> {
+export async function getTransferOrderLines(orderId: string, _orderNo: string): Promise<TransferOrderLine[]> {
   await delay(READ_DELAY_MS);
   return mockTransferOrderLines
     .filter((l) => l.transferOrderId === orderId)

@@ -119,10 +119,11 @@ export default function TransferOrderDetail({ mode }: { mode: DetailMode }) {
     setLoading(true);
     setError(null);
     (async () => {
-      const [locs, lns, ord] = await Promise.all([
+      // Resolve the order first (lines are filtered by the order *number*).
+      const ord = passedOrder ?? (await getTransferOrders()).find((o) => o.id === orderId) ?? null;
+      const [locs, lns] = await Promise.all([
         getLocations(),
-        getTransferOrderLines(orderId),
-        passedOrder ? Promise.resolve(passedOrder) : getTransferOrders().then((all) => all.find((o) => o.id === orderId) ?? null),
+        ord ? getTransferOrderLines(ord.id, ord.no) : Promise.resolve([] as TransferOrderLine[]),
       ]);
       if (!alive) return;
       setLocations(locs);

@@ -134,10 +134,13 @@ export async function getTransferOrders(): Promise<TransferOrder[]> {
   });
 }
 
-export async function getTransferOrderLines(orderId: string): Promise<TransferOrderLine[]> {
+// Lines link to their header by documentNumber (the order *no*, e.g. "1002"),
+// not by the header SystemId — so the caller passes the order number.
+export async function getTransferOrderLines(orderId: string, orderNo: string): Promise<TransferOrderLine[]> {
   const { env, companyId } = await getBCContext();
   const dataset = getBCDataset();
-  const filter = `documentId eq ${orderId}`;
+  const escNo = orderNo.replace(/'/g, "''");
+  const filter = `documentNumber eq '${escNo}'`;
   const rows = await unwrap('getTransferOrderLines', () =>
     Dynamics365BusinessCentralService.GetItemsV3(env, companyId, dataset, 'transferOrderLines', undefined, filter),
   );
@@ -145,8 +148,8 @@ export async function getTransferOrderLines(orderId: string): Promise<TransferOr
     const r = recordOf(row);
     return {
       id: pickStr(r, 'id', 'systemId'),
-      transferOrderId: pickStr(r, 'documentId', 'transferOrderId') || orderId,
-      lineNo: pickNum(r, 'lineNumber', 'lineNo'),
+      transferOrderId: pickStr(r, 'documentNumber', 'documentId', 'transferOrderId') || orderId,
+      lineNo: pickNum(r, 'sequence', 'lineNumber', 'lineNo'),
       itemNo: pickStr(r, 'itemNumber', 'itemNo', 'no'),
       description: pickStr(r, 'description'),
       quantity: pickNum(r, 'quantity'),
